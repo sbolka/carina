@@ -50,6 +50,7 @@ public class AliceRecognition implements IRecognition
 	private static final String ALICE_ENABLED = "alice_enabled";
 	private static final String ALICE_SERVICE_URL = "alice_service_url";
 	private static final String ALICE_ACCESS_TOKEN = "alice_access_token";
+	private static final String ALICE_MODEL = "alice_model";
 	
 	private boolean enabled = false;
 	
@@ -66,11 +67,12 @@ public class AliceRecognition implements IRecognition
 				
 			this.enabled = config.getBoolean(ALICE_ENABLED, false);
 			String url = config.getString(ALICE_SERVICE_URL, null); 
-			String accessToken = config.getString(ALICE_ACCESS_TOKEN, null); 
+			String accessToken = config.getString(ALICE_ACCESS_TOKEN, null);
+			String aliceModel = config.getString(ALICE_MODEL, null);
 		
-			if(enabled && !StringUtils.isEmpty(url) && !StringUtils.isEmpty(accessToken))
+			if(enabled && !StringUtils.isEmpty(url) && !StringUtils.isEmpty(aliceModel) && !StringUtils.isEmpty(accessToken))
 			{
-				this.client = new AliceClient(url);
+				this.client = new AliceClient(url, aliceModel);
 				this.client.setAuthToken(accessToken);
 				this.enabled = this.client.isAvailable();
 			}
