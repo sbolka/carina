@@ -121,6 +121,10 @@ public class ReportContext
 				throw new RuntimeException("Folder not created: " + tempDirectory.getAbsolutePath());
 			}
 		}
+		
+		if (!tempDirectory.exists()) {
+			tempDirectory.mkdir();
+		}
 		return tempDirectory;
 	}
 	
