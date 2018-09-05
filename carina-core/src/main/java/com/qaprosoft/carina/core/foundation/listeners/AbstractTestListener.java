@@ -65,11 +65,20 @@ public class AbstractTestListener extends TestArgsListener {
 
     protected static ThreadLocal<TestResultItem> configFailures = new ThreadLocal<TestResultItem>();
 
+    /**
+     * Calls on new test class creating
+     * @param instanceId - unique test class value
+     * @param params - test class constructor parameters values
+     */
+    public synchronized static void onTestClassInstanceCreate(String instanceId, Object... params) {
+        TestNamingUtil.getTestId2TestClassParameters().put(instanceId, params);
+    }
+
     private void startItem(ITestResult result, Messager messager) {
         RetryCounter.initCounter();
 
         String test = TestNamingUtil.getCanonicalTestName(result);
-        test = TestNamingUtil.associateTestInfo2Thread(test, Thread.currentThread().getId());
+        test = TestNamingUtil.associateTestInfo2Thread(result, Thread.currentThread().getId());
 
         String deviceName = getDeviceName();
         messager.info(deviceName, test, DateUtils.now());

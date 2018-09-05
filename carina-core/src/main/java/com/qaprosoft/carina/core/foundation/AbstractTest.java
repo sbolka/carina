@@ -20,11 +20,7 @@ import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -107,9 +103,22 @@ public abstract class AbstractTest // extends DriverHelper
 
     protected static ThreadLocal<String> suiteNameAppender = new ThreadLocal<String>();
 
+    /**
+     * Test class instance identifier value
+     */
+    private String instanceUUID = UUID.randomUUID().toString();
+
     // 3rd party integrations
     protected String browserVersion = "";
     protected long startDate;
+
+    protected AbstractTest() {
+        this(new Object[] {});
+    }
+
+    protected AbstractTest(Object... params) {
+        AbstractTestListener.onTestClassInstanceCreate(instanceUUID, params);
+    }
 
     @BeforeSuite(alwaysRun = true)
     public void executeBeforeTestSuite(ITestContext context) {
@@ -209,7 +218,7 @@ public abstract class AbstractTest // extends DriverHelper
 
     @BeforeClass(alwaysRun = true)
     public void executeBeforeTestClass(ITestContext context) throws Throwable {
-        // do nothing for now
+        context.setAttribute("instanceUUID", instanceUUID);
     }
 
     @AfterClass(alwaysRun = true)

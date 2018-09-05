@@ -15,19 +15,18 @@
  *******************************************************************************/
 package com.qaprosoft.carina.core.foundation.utils.naming;
 
-import java.util.Arrays;
-import java.util.Map;
-import java.util.Stack;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.qaprosoft.carina.core.foundation.utils.*;
+import com.qaprosoft.carina.core.foundation.utils.tuid.TUIDUtils;
 import org.apache.commons.lang3.StringEscapeUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
-import org.testng.ITestNGMethod;
-import org.testng.ITestResult;
+import org.testng.*;
 
 import com.qaprosoft.carina.core.foundation.commons.SpecialKeywords;
 import com.qaprosoft.carina.core.foundation.retry.RetryCounter;
-import com.qaprosoft.carina.core.foundation.utils.Configuration;
 
 /**
  * Common naming utility for unique test method identification.
@@ -43,7 +42,15 @@ public class TestNamingUtil {
 
     private static final ConcurrentHashMap<String, String> testName2Bug = new ConcurrentHashMap<String, String>();
 
-    public static synchronized String associateTestInfo2Thread(String test, Long threadId) {
+    /**
+     * Stores test class instance identifier parameters
+     * <b>Key</b>: Test class instance id
+     * <b>Value</b>: Test class constructor parameters values
+     */
+    private static final ConcurrentHashMap<String, Object[]> testClassInstanceId2TestClassParameters = new ConcurrentHashMap<>();
+
+    public static synchronized String associateTestInfo2Thread(ITestResult testResult, Long threadId) {
+        String test = getCanonicalTestName(testResult);
         // introduce invocation count calculation here as in multi threading mode TestNG doesn't provide valid
         // getInvocationCount() value
         int count = 1;
@@ -51,6 +58,11 @@ public class TestNamingUtil {
             count = testName2Counter.get(test) + 1;
             LOGGER.warn(test + " test was already registered. Incrementing invocation count to " + count);
         }
+
+        final String instanceUUID = testResult.getTestContext().getAttribute("instanceUUID") != null ? testResult.getTestContext().getAttribute("instanceUUID").toString() : null;
+
+        test = test + StringUtils.SPACE + TUIDUtils.getTUID(testResult, count, instanceUUID != null ? testClassInstanceId2TestClassParameters.get(instanceUUID) : new Object[] {});
+
         testName2Counter.put(test, count);
 
         // don't use invCount for tests during retry
@@ -224,4 +236,7 @@ public class TestNamingUtil {
         return testName;
     }
 
+    public static ConcurrentHashMap<String, Object[]> getTestId2TestClassParameters() {
+        return testClassInstanceId2TestClassParameters;
+    }
 }

@@ -93,6 +93,10 @@ public class SpecialKeywords {
 
     public static final String INV_COUNT = "InvCount";
     public static final String INVOCATION_COUNTER = " (" + INV_COUNT + "=%s)";
+    public static final String DATA_ROVIDER_PARAMS = " [%s] ";
+    public static final String CLASS_INSTANCE = "ClassInst";
+    public static final String FACTORY_PARAM = " [" + CLASS_INSTANCE + "=%s] ";
+    public static final String TUID_PARAM = " [" + TUID + ": %s] ";
     public static final String DESKTOP = "desktop";
     public static final String MOBILE = "mobile";
 
