@@ -15,6 +15,7 @@
  *******************************************************************************/
 package com.qaprosoft.carina.core.foundation.utils.tuid;
 
+import org.apache.commons.lang3.StringUtils;
 import org.testng.ITestResult;
 
 import java.util.Arrays;
@@ -68,6 +69,6 @@ interface ITUIDGenerator extends ITUIDGeneratorListener {
                     break;
             }
             return result;
-        }).collect(Collectors.joining(getDelimiter()));
+        }).filter(additionalInfo -> ! StringUtils.isBlank(additionalInfo)).collect(Collectors.joining(getDelimiter()));
     }
 }

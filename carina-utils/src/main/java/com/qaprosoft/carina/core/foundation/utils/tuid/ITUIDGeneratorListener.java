@@ -21,6 +21,7 @@ import org.testng.ITestResult;
  * Needs to have a possibility to create external custom TUID generator
  * @author brutskov
  */
+@FunctionalInterface
 public interface ITUIDGeneratorListener {
 
     /**

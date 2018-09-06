@@ -43,7 +43,7 @@ public @interface TUID {
      * Test name TUID provider
      * Mutually exclusive with the getter attribute
      */
-    String tuidProvider();
+    String tuidProvider() default "";
 
     /**
      * Test name TUID generator

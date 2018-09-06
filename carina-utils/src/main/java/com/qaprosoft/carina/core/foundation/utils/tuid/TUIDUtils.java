@@ -18,15 +18,15 @@ package com.qaprosoft.carina.core.foundation.utils.tuid;
 import com.qaprosoft.carina.core.foundation.commons.SpecialKeywords;
 import com.qaprosoft.carina.core.foundation.exception.AnnotationResolverException;
 import com.qaprosoft.carina.core.foundation.utils.AnnotationUtils;
-import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.reflect.MethodUtils;
 import org.testng.ITestResult;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.qaprosoft.carina.core.foundation.utils.tuid.TUID.AdditionalInfo.NOT;
@@ -36,6 +36,8 @@ import static com.qaprosoft.carina.core.foundation.utils.tuid.TUID.AdditionalInf
  * @author brutskov
  */
 public class TUIDUtils extends AnnotationUtils {
+
+    private static final String TUID_ERROR_MESSAGE_PATTERN = "Cannot resolve TUID provider: %s";
 
     /**
      * Gets TUID by testNG transfer context object, test thread id , count, test class instance parameters
@@ -52,43 +54,28 @@ public class TUIDUtils extends AnnotationUtils {
                 String result = null;
                 String prefix = annotation.prefix();
                 String postfix = annotation.postfix();
-                String tuidProviderName = annotation.tuidProvider();
-                ITUIDGeneratorListener generatorListener = getTUIDGeneratorListener(annotation);
+                ITUIDGeneratorListener generatorListener = getTUIDGeneratorListener(testResult, annotation);
                 result = String.format(SpecialKeywords.TUID_PARAM, prefix + generatorListener.getTUID(testResult, count, params) + postfix);
                 if (!Arrays.asList(annotation.additionalInfos()).contains(NOT)) {
-                    ITUIDGenerator additionalGenerator = (ITUIDGenerator) getTUIDGeneratorListener(null);
+                    ITUIDGenerator additionalGenerator = (ITUIDGenerator) getTUIDGeneratorListener(testResult, null);
                     additionalInfo.append(additionalGenerator.buildFor(annotation.additionalInfos(), testResult, params));
                 }
                 return result;
-            })) + additionalInfo.toString();
+            })) + objectToString(additionalInfo);
         } else {
             tuid = getDefaultTUID(testResult, count, params);
         }
         return tuid;
     }
 
-    private static Method getTUIDProvider(final ITestResult testResult, final String tuidProviderName) {
-        List<Method> tuidProviders = MethodUtils.getMethodsListWithAnnotation(testResult.getTestClass().getRealClass(), TUIDProvider.class).stream().filter(method -> method.getAnnotation(TUIDProvider.class).name().equalsIgnoreCase(tuidProviderName)).collect(Collectors.toList());
-        if(CollectionUtils.isEmpty(tuidProviders)) {
-            throw new AnnotationResolverException("Cannot find TUID provider with name '" + tuidProviderName + ".");
-        } else if(tuidProviders.size() > 1) {
-            throw new AnnotationResolverException("Cannot resolve TUID provider with name '" + tuidProviderName + "'. Required one annotated element but found " + tuidProviders.size());
-        }
-        Method tuidProvider = tuidProviders.get(0);
+    private static String invokeTUIDProvider(final ITestResult testResult, final Method method, int count, Object... params) {
+        String result = null;
         try {
-            ITUIDGeneratorListener.class.getMethod("getTUID", tuidProvider.getParameterTypes());
-        } catch (NoSuchMethodException e) {
-            throw new AnnotationResolverException("Cannot resolve TUID provider with name '" + tuidProviderName + "'. Parameters ahould be " + Arrays.stream(ITUIDGeneratorListener.class.getMethods()).filter(method -> method.getName().equals("getTUID")).findFirst().orElse(null).getParameterTypes().toString());
-        }
-        return tuidProvider;
-    }
-
-    private static void invokeTUIDProvider(final ITestResult testResult, final String tuidProviderName, int count, Object... params) {
-        try {
-            MethodUtils.invokeMethod(testResult.getInstance(), tuidProviderName, testResult, count, params);
+            result = objectToString(method.invoke(testResult.getInstance(), testResult, count, params));
         } catch (Exception e) {
-            LOGGER.error(e.getMessage(), e);
+            throw new AnnotationResolverException(getErrorMessage("cannot find provider method with parameters"));
         }
+        return result;
     }
 
     /**
@@ -99,7 +86,7 @@ public class TUIDUtils extends AnnotationUtils {
      * @return string built with basic test env info
      */
     public static String getDefaultTUID(final ITestResult testResult, final int count, final Object... params) {
-        ITUIDGenerator additionalGenerator = (ITUIDGenerator) getTUIDGeneratorListener(null);
+        ITUIDGenerator additionalGenerator = (ITUIDGenerator) getTUIDGeneratorListener(testResult, null);
         return additionalGenerator != null ? additionalGenerator.getTUID(testResult, count, params) : null;
     }
 
@@ -108,32 +95,60 @@ public class TUIDUtils extends AnnotationUtils {
      * @param annotation - annotation instance
      * @return needed TUID generator listener
      */
-    public static ITUIDGeneratorListener getTUIDGeneratorListener(final TUID annotation) {
-        //checkAnnotation(annotation);
+    public static ITUIDGeneratorListener getTUIDGeneratorListener(final ITestResult testResult, final TUID annotation) {
+        if(annotation != null) {
+            checkAnnotation(annotation);
+        }
         ITUIDGeneratorListener additionalGenerator = null;
         try {
-            Class<? extends ITUIDGeneratorListener> generatorClass = annotation != null ? annotation.getter() : AnnotationUtils.<Class<ITUIDGeneratorListener>>getAnnotationDefaultValue(TUID.class, TUID.getterName);
-            additionalGenerator = generatorClass.newInstance();
+            Class<? extends ITUIDGeneratorListener> generatorClass = annotation != null ? annotation.tuidProvider().isEmpty() ? annotation.getter() : null : AnnotationUtils.<Class<ITUIDGeneratorListener>>getAnnotationDefaultValue(TUID.class, TUID.getterName);
+            additionalGenerator = generatorClass != null ? generatorClass.newInstance() : annotation != null ? (testResult1, invocationCount, instanceParams) -> invokeTUIDProvider(testResult1, getTUIDProviderMethod(testResult, annotation), invocationCount, instanceParams) : null;
         } catch (InstantiationException e) {
-            LOGGER.error("Cannot find default constructor: " + e.getMessage(), e);
+            LOGGER.error(getErrorMessage("cannot find default constructor: ") + e.getMessage(), e);
         } catch (IllegalAccessException e) {
-            LOGGER.error("Have not access to default constructor: " + e.getMessage(), e);
+            LOGGER.error(getErrorMessage("have not access to default constructor: ") + e.getMessage(), e);
         }
         return additionalGenerator;
     }
 
-   /* private Class<? extends ITUIDGeneratorListener> getGeneratorClass(final TUID annotation) {
-        Class<? extends ITUIDGeneratorListener> generatorClass = null;
-        if(annotation != null) {
-            gene
-        }
-        Class<? extends ITUIDGeneratorListener> generatorClass = annotation != null ? annotation.getter() : AnnotationUtils.<Class<ITUIDGeneratorListener>>getAnnotationDefaultValue(TUID.class, TUID.getterName);
-
-    }*/
-
     private static void checkAnnotation(final TUID annotation) {
-        if(annotation.getter() != null && annotation.tuidProvider() != null) {
-            throw new AnnotationResolverException("Cannot resolve TUID provider: getter and tuidProvider attributes are mutually exclusive.");
+        if(! annotation.getter().isAssignableFrom(SimpleTUIDGeneratorListener.class) && ! annotation.tuidProvider().isEmpty()) {
+            throw new AnnotationResolverException(getErrorMessage("getter and tuidProvider attributes are mutually exclusive."));
         }
+    }
+
+    private static Method getTUIDProviderMethod(final ITestResult testResult, final TUID annotation) {
+        Method tuidProviderMethod = null;
+        if(! annotation.tuidProvider().isEmpty()) {
+            List<Method> tuidProviderMethods = MethodUtils.getMethodsListWithAnnotation(testResult.getTestClass().getRealClass(), TUIDProvider.class).stream().filter(method -> method.getAnnotation(TUIDProvider.class).name().equals(annotation.tuidProvider())).collect(Collectors.toList());
+            String message = tuidProviderMethods.size() == 0 ? "cannot find tuid provider with name '" + annotation.tuidProvider() + "'" : tuidProviderMethods.size() > 1 ? "multiple tuid providers with name '" + annotation.tuidProvider() + "' were found" : null;
+            if(message != null) {
+                throw new AnnotationResolverException(getErrorMessage(message));
+            }
+            tuidProviderMethod = tuidProviderMethods.get(0);
+            if(ITUIDGeneratorListener.class.isAnnotationPresent(FunctionalInterface.class)) {
+                Method originMethod = ITUIDGeneratorListener.class.getDeclaredMethods()[0];
+                if(! Arrays.equals(originMethod.getParameterTypes(), tuidProviderMethod.getParameterTypes())) {
+                    throw new AnnotationResolverException(getErrorMessage("tuid provider has invalid parameters. Parameter types should be (" + Arrays.stream(originMethod.getParameterTypes()).map(Class::getName).collect(Collectors.joining(", ")) + ")"));
+                }
+            }
+        }
+        return tuidProviderMethod;
+    }
+
+    private static String getErrorMessage(String messagePostfix) {
+        return String.format(TUID_ERROR_MESSAGE_PATTERN, messagePostfix);
+    }
+
+    public static String objectToString(Object o) {
+        String result = null;
+        if(o != null) {
+            result = o.toString();
+            Matcher matcher = Pattern.compile("(?=@).+$").matcher(result);
+            if(matcher.find()) {
+                result = o.getClass().getName();
+            }
+        }
+        return result;
     }
 }

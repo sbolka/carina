@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
  * Base implementation of TUID generator
  * @author brutskov
  */
-public class SimpleTUIDGeneratorListener implements ITUIDGenerator {
+class SimpleTUIDGeneratorListener implements ITUIDGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(SimpleTUIDGeneratorListener.class);
     private static final String DIVIDER = ", ";
@@ -81,7 +81,7 @@ public class SimpleTUIDGeneratorListener implements ITUIDGenerator {
         final Method testMethod = testResult.getMethod().getConstructorOrMethod().getMethod();
         if(testMethod.isAnnotationPresent(Test.class) && ! StringUtils.isBlank(testMethod.getAnnotation(Test.class).dataProvider())
                 && testResult.getParameters().length > 0) {
-            result = result + buildString(SpecialKeywords.DATA_ROVIDER_PARAMS, DIVIDER, testResult.getParameters());
+            result = buildString(SpecialKeywords.DATA_ROVIDER_PARAMS, DIVIDER, testResult.getParameters());
         }
         return result;
     }
@@ -103,7 +103,7 @@ public class SimpleTUIDGeneratorListener implements ITUIDGenerator {
      * @return built string
      */
     private static String buildString(final String pattern, final String delimiter, final Object... parameters) {
-        return String.format(pattern, Arrays.stream(parameters).map(Object::toString).collect(Collectors.joining(delimiter)));
+        return String.format(pattern, Arrays.stream(parameters).map(TUIDUtils::objectToString).collect(Collectors.joining(delimiter)));
     }
 
     /**
