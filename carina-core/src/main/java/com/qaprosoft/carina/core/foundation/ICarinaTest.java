@@ -16,13 +16,9 @@
 package com.qaprosoft.carina.core.foundation;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.PrintWriter;
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.Enumeration;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -35,7 +31,6 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.remote.DesiredCapabilities;
 import org.testng.Assert;
 import org.testng.ITestContext;
-import org.testng.ITestNGMethod;
 import org.testng.ITestResult;
 import org.testng.SkipException;
 import org.testng.annotations.AfterClass;
@@ -44,7 +39,6 @@ import org.testng.annotations.AfterSuite;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.BeforeSuite;
-import org.testng.annotations.DataProvider;
 import org.testng.annotations.Listeners;
 import org.testng.xml.XmlTest;
 
@@ -53,7 +47,6 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.jayway.restassured.RestAssured;
 import com.qaprosoft.amazon.AmazonS3Manager;
 import com.qaprosoft.carina.core.foundation.commons.SpecialKeywords;
-import com.qaprosoft.carina.core.foundation.dataprovider.core.DataProviderFactory;
 import com.qaprosoft.carina.core.foundation.jira.Jira;
 import com.qaprosoft.carina.core.foundation.listeners.AbstractTestListener;
 import com.qaprosoft.carina.core.foundation.performance.ACTION_NAME;
@@ -71,13 +64,8 @@ import com.qaprosoft.carina.core.foundation.utils.Configuration;
 import com.qaprosoft.carina.core.foundation.utils.Configuration.DriverMode;
 import com.qaprosoft.carina.core.foundation.utils.Configuration.Parameter;
 import com.qaprosoft.carina.core.foundation.utils.DateUtils;
-import com.qaprosoft.carina.core.foundation.utils.JsonUtils;
 import com.qaprosoft.carina.core.foundation.utils.Messager;
 import com.qaprosoft.carina.core.foundation.utils.R;
-import com.qaprosoft.carina.core.foundation.utils.common.CommonUtils;
-import com.qaprosoft.carina.core.foundation.utils.metadata.MetadataCollector;
-import com.qaprosoft.carina.core.foundation.utils.metadata.model.ElementsInfo;
-import com.qaprosoft.carina.core.foundation.utils.naming.TestNamingUtil;
 import com.qaprosoft.carina.core.foundation.utils.resources.I18N;
 import com.qaprosoft.carina.core.foundation.utils.resources.L10N;
 import com.qaprosoft.carina.core.foundation.utils.resources.L10Nparser;
@@ -93,24 +81,15 @@ import com.qaprosoft.hockeyapp.HockeyAppManager;
  * @author Alex Khursevich
  */
 @Listeners({ AbstractTestListener.class })
-@FunctionalInterface
 public interface ICarinaTest {
     public static final Logger LOGGER = Logger.getLogger(AbstractTest.class);
 
-    public static final long EXPLICIT_TIMEOUT = Configuration.getLong(Parameter.EXPLICIT_TIMEOUT);
-
     public static final String SUITE_TITLE = "%s%s%s - %s (%s%s)";
     public static final String XML_SUITE_NAME = " (%s)";
-
-    public void init();
     
     @BeforeSuite(alwaysRun = true)
     default public void executeBeforeTestSuite(ITestContext context) {
-        
         Timer.start(ACTION_NAME.RUN_SUITE);
-
-        // Add shutdown hook
-        Runtime.getRuntime().addShutdownHook(new ShutdownHook());
         // Set log4j properties
         PropertyConfigurator.configure(ClassLoader.getSystemResource("log4j.properties"));
         // Set SoapUI log4j properties
@@ -338,8 +317,28 @@ public interface ICarinaTest {
             // Store emailable report under emailable-report.html
             ReportContext.generateHtmlReport(emailContent);
 
-            printExecutionSummary(EmailReportItemCollector.getTestResults());
+            // -- printExecutionSummary ---
+            Messager.INROMATION.info("**************** Test execution summary ****************");
+            int num = 1;
+            for (TestResultItem tri : EmailReportItemCollector.getTestResults()) {
+                String failReason = tri.getFailReason();
+                if (failReason == null) {
+                    failReason = "";
+                }
 
+                if (!tri.isConfig() && !failReason.contains(SpecialKeywords.ALREADY_PASSED)
+                        && !failReason.contains(SpecialKeywords.SKIP_EXECUTION)) {
+                    String reportLinks = !StringUtils.isEmpty(tri.getLinkToScreenshots())
+                            ? "screenshots=" + tri.getLinkToScreenshots() + " | "
+                            : "";
+                    reportLinks += !StringUtils.isEmpty(tri.getLinkToLog()) ? "log=" + tri.getLinkToLog() : "";
+                    Messager.TEST_RESULT.info(String.valueOf(num++), tri.getTest(), tri.getResult().toString(),
+                            reportLinks);
+                }
+            }
+            // -- printExecutionSummary ---            
+            
+            
             LOGGER.debug("Generating email report...");
 
             TestResultType suiteResult = EmailReportGenerator.getSuiteResult(EmailReportItemCollector.getTestResults());
@@ -363,6 +362,14 @@ public interface ICarinaTest {
         }
 
     }
+    
+    default public String getBrowser() {
+        String browser = "";
+        if (!Configuration.get(Parameter.BROWSER).isEmpty()) {
+            browser = Configuration.get(Parameter.BROWSER);
+        }
+        return browser;
+    }
 
     // TODO: remove this private method
     default public String getDeviceName() {
@@ -376,15 +383,6 @@ public interface ICarinaTest {
         }
 
         return deviceName;
-    }
-
-    default public String getBrowser() {
-        String browser = "";
-        if (!Configuration.get(Parameter.BROWSER).isEmpty()) {
-            browser = Configuration.get(Parameter.BROWSER);
-        }
-
-        return browser;
     }
 
     default public String getTitle(ITestContext context) {
@@ -439,66 +437,6 @@ public interface ICarinaTest {
         }
 
         return suiteName;
-    }
-
-    default public void printExecutionSummary(List<TestResultItem> tris) {
-        Messager.INROMATION
-                .info("**************** Test execution summary ****************");
-        int num = 1;
-        for (TestResultItem tri : tris) {
-            String failReason = tri.getFailReason();
-            if (failReason == null) {
-                failReason = "";
-            }
-
-            if (!tri.isConfig() && !failReason.contains(SpecialKeywords.ALREADY_PASSED)
-                    && !failReason.contains(SpecialKeywords.SKIP_EXECUTION)) {
-                String reportLinks = !StringUtils.isEmpty(tri.getLinkToScreenshots())
-                        ? "screenshots=" + tri.getLinkToScreenshots() + " | "
-                        : "";
-                reportLinks += !StringUtils.isEmpty(tri.getLinkToLog()) ? "log=" + tri.getLinkToLog() : "";
-                Messager.TEST_RESULT.info(String.valueOf(num++), tri.getTest(), tri.getResult().toString(),
-                        reportLinks);
-            }
-        }
-    }
-
-    /**
-     * Redefine TestRails cases from test.
-     *
-     * @param cases to set
-     */
-    default public void setTestRailCase(String... cases) {
-        TestRail.setCasesID(cases);
-    }
-
-    @DataProvider(name = "DataProvider", parallel = true)
-    default public Object[][] createData(final ITestNGMethod testMethod, ITestContext context) {
-        Annotation[] annotations = testMethod.getConstructorOrMethod().getMethod().getDeclaredAnnotations();
-        Object[][] objects = DataProviderFactory.getNeedRerunDataProvider(annotations, context, testMethod);
-        return objects;
-    }
-
-    @DataProvider(name = "SingleDataProvider")
-    default public Object[][] createDataSingleThread(final ITestNGMethod testMethod,
-            ITestContext context) {
-        Annotation[] annotations = testMethod.getConstructorOrMethod().getMethod().getDeclaredAnnotations();
-        Object[][] objects = DataProviderFactory.getNeedRerunDataProvider(annotations, context, testMethod);
-        return objects;
-    }
-
-    /**
-     * Pause for specified timeout.
-     *
-     * @param timeout in seconds.
-     */
-
-    default public void pause(long timeout) {
-        CommonUtils.pause(timeout);
-    }
-
-    default public void pause(Double timeout) {
-        CommonUtils.pause(timeout);
     }
 
     default public void putS3Artifact(String key, String path) {
@@ -630,11 +568,6 @@ public interface ICarinaTest {
         }
     }
 
-    default public void setBug(String id) {
-        String test = TestNamingUtil.getTestNameByThread();
-        TestNamingUtil.associateBug(test, id);
-    }
-
     default public void skipExecution(String message) {
         throw new SkipException(SpecialKeywords.SKIP_EXECUTION + ": " + message);
     }
@@ -665,54 +598,8 @@ public interface ICarinaTest {
         //return castDriver(drv);
     }
 
-/*    private WebDriver castDriver(WebDriver drv) {
-        if (drv instanceof EventFiringWebDriver) {
-            return ((EventFiringWebDriver) drv).getWrappedDriver();
-        } else {
-            return drv;
-        }
-    }*/
-    
     default public void quitDrivers() {
         DriverPool.quitDrivers();
-    }
-
-    public static class ShutdownHook extends Thread {
-
-        private static final Logger LOGGER = Logger.getLogger(ShutdownHook.class);
-
-        private void generateMetadata() {
-            Map<String, ElementsInfo> allData = MetadataCollector.getAllCollectedData();
-            if (allData.size() > 0) {
-                LOGGER.debug("Generating collected metadada start...");
-            }
-            for (String key : allData.keySet()) {
-                LOGGER.debug("Creating... medata for '" + key + "' object...");
-                File file = new File(ReportContext.getArtifactsFolder().getAbsolutePath() + "/metadata/" + key.hashCode() + ".json");
-                PrintWriter out = null;
-                try {
-                    out = new PrintWriter(file);
-                    out.append(JsonUtils.toJson(MetadataCollector.getAllCollectedData().get(key)));
-                    out.flush();
-                } catch (FileNotFoundException e) {
-                    LOGGER.error("Unable to write metadata to json file: " + file.getAbsolutePath(), e);
-                } finally {
-                    out.close();
-                }
-                LOGGER.debug("Created medata for '" + key + "' object...");
-            }
-
-            if (allData.size() > 0) {
-                LOGGER.debug("Generating collected metadada finish...");
-            }
-        }
-
-        @Override
-        public void run() {
-            LOGGER.debug("Running shutdown hook");
-            generateMetadata();
-        }
-
     }
 
 }
