@@ -40,8 +40,8 @@ public class FtpUtils {
 	public static void uploadData(String ftpHost, int port, String user, String password, String data,
 			String destinationFileName) {
 		byte[] decode = Base64.getDecoder().decode(data);
-		LOGGER.debug("Data size to upload: " + data.length());
-		LOGGER.debug("Encoded data size to upload: " + decode.length);
+		LOGGER.info("Data size to upload: " + data.length());
+		LOGGER.info("Encoded data size to upload: " + decode.length);
 		try (InputStream is = new ByteArrayInputStream(decode)) {
 			upload(ftpHost, port, user, password, is, destinationFileName);
 		} catch (IOException e) {
@@ -51,17 +51,17 @@ public class FtpUtils {
 
 	private static void upload(String ftpHost, int port, String user, String password, InputStream is,
 			String fileName) {
-	    LOGGER.debug("FTP host to upload data : " + ftpHost);
-	    LOGGER.debug("FTP port to upload data : " + port);
-        LOGGER.debug("Destination file name : " + fileName);
+	    LOGGER.info("FTP host to upload data : " + ftpHost);
+	    LOGGER.info("FTP port to upload data : " + port);
+        LOGGER.info("Destination file name : " + fileName);
         long start = System.currentTimeMillis();
 		FTPClient ftp = new FTPClient();
 		try {
 			int reply;
 			ftp.connect(ftpHost, port);
-			LOGGER.debug("Connected to server : " + ftpHost);
+			LOGGER.info("Connected to server : " + ftpHost);
 			reply = ftp.getReplyCode();
-			LOGGER.debug("Reply code is : " + reply);
+			LOGGER.info("Reply code is : " + reply);
 			if (!FTPReply.isPositiveCompletion(reply)) {
 				ftp.disconnect();
 				LOGGER.info("FTP server refused connection. Reply code is : " + reply);
@@ -70,7 +70,7 @@ public class FtpUtils {
 			if (!ftp.login(user, password)) {
 			    throw new Exception("Login to ftp failed. Check user credentials.");
 			};
-			LOGGER.debug("User has been successfully logged in.");
+			LOGGER.info("User has been successfully logged in.");
 			ftp.setFileType(FTP.BINARY_FILE_TYPE);
 			try {
 			    ftp.enterLocalPassiveMode();
@@ -99,7 +99,7 @@ public class FtpUtils {
 				LOGGER.error("Exception while disconnecting ftp", ioe);
 			}
 		}
-		LOGGER.debug("FTP has been successfully disconnected.");
+		LOGGER.info("FTP has been successfully disconnected.");
 	}
 
 }
