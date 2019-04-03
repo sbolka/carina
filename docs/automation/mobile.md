@@ -217,6 +217,20 @@ Example:
 protected ExtendedWebElement developerText;
 ```
 
+Starting from Carina version 6.0.12 it's recommended to use @ExtendedFindBy() annotation
+Example:
+```
+@ExtendedFindBy(classChain = "**/XCUIElementTypeStaticText[`name=='Developer'`]")
+@ClassChain
+protected ExtendedWebElement developerText;
+```
+or 
+```
+@ExtendedFindBy(predicate = "**/XCUIElementTypeStaticText[`name=='Developer'`]")
+@ClassChain
+protected ExtendedWebElement developerText;
+```
+
 ### Implementation of tests
 Carina framework uses TestNG for test organization. In general, test represents manipulation with Page Objects and additional validations of UI events. Here is sample test implementation:
 
